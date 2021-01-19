@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <title></title>
+  </head>
+  <body>
+    <p>
+      Connect and disconnect HID devices.
+    </p>
+    <button id="connectbutton" style="display:block;font-size:20px;padding:10px" onclick="requestDevice()">Click to connect to a HID device</button>
+    <div id="mylog"></div>
+    <script>
+
+const logappend = (msg) => {
+  console.log(msg);
+  var mylog = document.getElementById('mylog');
+  var line = document.createElement('div');
+  line.textContent = msg;
+  mylog.appendChild(line);
+}
+
+const logDeviceCount = () => {
+  navigator.hid.getDevices().then(dd => {
+    logappend(dd.length + ' devices connected');
+  });
+}
+
+const logDevice = (source, device) => {
+  logappend(source + ': ' + device.productName + ' has ' + device.collections.length + ' ' + ((device.collections.length == 1) ? 'collection' : 'collections'));
+  logDeviceCount();
+}
+
+const requestDevice = async () => {
+  const devices = await navigator.hid.requestDevice({filters: []});
+  for (const d of devices) {
+    logDevice('requestDevice', d);
+  }
+}
+
+navigator.hid.onconnect = (event) => {
+  logDevice('onconnect', event.device);
+}
+
+navigator.hid.ondisconnect = (event) => {
+  logDevice('ondisconnect', event.device);
+}
+
+logDeviceCount();
+
+    </script>
+  </body>
+</html>
