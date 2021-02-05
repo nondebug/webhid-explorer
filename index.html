@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html>
   <head>
@@ -6,11 +7,41 @@
   </head>
   <body>
     <p>
-      Connect and disconnect HID devices.
-    </p>
     <button id="connectbutton" style="display:block;font-size:20px;padding:10px" onclick="requestDevice()">Click to connect to a HID device</button>
+    </p>
+
+    <p>
+    Connected device:<br />
+    <input type="text" id="productname" style="width:400px;" disabled /><br />
+    <input type="text" id="vidpid" style="width:80px;" disabled />
+    </p>
+
+    <p>
+    Input report: <input type="text" id="inputreportid" style="width:20px;" disabled /><br />
+    <textarea id="inputreport" cols="48" rows="6" disabled></textarea>
+    </p>
+
+    <p>
+    Output report: <input type="text" id="outputreportid" style="width:20px;" /><br />
+    <textarea id="outputreport" cols="48" rows="6"></textarea><br />
+    <button id="sendreport" onclick="sendReport()">Send</button>
+    </p>
+
+    <p>
+    Feature report: <input type="text" id="featurereportid" style="width:20px;" /><br />
+    <textarea id="featurereport" cols="48" rows="6"></textarea><br />
+    <button id="sendfeaturereport" onclick="sendFeatureReport()">Send</button>
+    <button id="receivefeaturereport" onclick="receiveFeatureReport()">Receive</button>
+    </p>
+
     <div id="mylog"></div>
     <script>
+
+const kDeviceFilters = [
+    {vendorId:0x2341, productId:0x8057}, // Arduino NANO 33 IoT
+];
+
+let connectedDevice = null;
 
 const logappend = (msg) => {
   console.log(msg);
@@ -18,33 +49,149 @@ const logappend = (msg) => {
   var line = document.createElement('div');
   line.textContent = msg;
   mylog.appendChild(line);
-}
+};
+
+const pluralize = (count, thing) => {
+  return count + ' ' + thing + (count == 1 ? '' : 's');
+};
+
+const hexbyte = (value) =>  {
+  return ('00' + value.toString(16)).substr(-2);
+};
+
+const hexshort = (value) => {
+  return ('0000' + value.toString(16)).substr(-4);
+};
+
+const hexview = (data) => {
+  let s = '';
+  let u8 = new Uint8Array(data.buffer);
+  for (const byteValue of u8) {
+    if (s)
+      s += ' ';
+    s += hexbyte(byteValue);
+  }
+  return s;
+};
 
 const logDeviceCount = () => {
-  navigator.hid.getDevices().then(dd => {
-    logappend(dd.length + ' devices connected');
+  navigator.hid.getDevices().then(devices => {
+    logappend('getDevices has ' + pluralize(devices.length, 'device'));
   });
-}
+};
 
 const logDevice = (source, device) => {
-  logappend(source + ': ' + device.productName + ' has ' + device.collections.length + ' ' + ((device.collections.length == 1) ? 'collection' : 'collections'));
+  logappend(source + ': ' + device.productName + ' has ' + pluralize(device.collections.length, 'collection'));
   logDeviceCount();
+};
+
+const onOpened = (device) => {
+  connectedDevice = device;
+
+  const productNameText = document.getElementById('productname');
+  const vidPidText = document.getElementById('vidpid');
+  productNameText.value = device.productName;
+  vidPidText.value = hexshort(device.vendorId) + ':' + hexshort(device.productId);
 }
 
 const requestDevice = async () => {
-  const devices = await navigator.hid.requestDevice({filters: []});
-  for (const d of devices) {
+  const devices = await navigator.hid.requestDevice({filters: kDeviceFilters});
+  if (devices.length == 0)
+    return;
+
+  for (const d of devices)
     logDevice('requestDevice', d);
+  devices[0].open().then(() => {
+    if (devices[0].opened)
+      onOpened(devices[0])
+  });
+};
+
+const parseHexArray = (text) => {
+  // Remove non-hex characters.
+  text = text.replace(/[^0-9a-fA-F]/g, '');
+  if (text.length % 2)
+    return null;
+
+  // Parse each character pair as a hex byte value.
+  let u8 = new Uint8Array(text.length / 2);
+  for (let i = 0; i < text.length; i += 2)
+    u8[i / 2] = parseInt(text.substr(i, 2), 16);
+
+  return new DataView(u8.buffer);
+};
+
+const sendReport = async () => {
+  if (!connectedDevice) {
+    logappend('sendReport: No connected device!');
+    return;
   }
-}
+
+  const outputReportIdText = document.getElementById('outputreportid');
+  const outputReportTextArea = document.getElementById('outputreport');
+
+  let reportId = 0;
+  if (outputReportIdText.value)
+    reportId = parseInt(outputReportIdText.value, 16);
+  let data = parseHexArray(outputReportTextArea.value);
+
+  outputReportIdText.value = hexbyte(reportId);
+  outputReportTextArea.value = hexview(data);
+
+  logappend('sendReport ID:' + hexbyte(reportId) + ' ' + hexview(data));
+
+  await connectedDevice.sendReport(reportId, data);
+};
+
+const sendFeatureReport = async () => {
+  if (!connectedDevice) {
+    logappend('sendFeatureReport: No connected device!');
+    return;
+  }
+
+  const featureReportIdText = document.getElementById('featurereportid');
+  const featureReportTextArea = document.getElementById('featurereport');
+
+  let reportId = 0;
+  if (featureReportIdText.value)
+    reportId = parseInt(featureReportIdText.value, 16);
+  let data = parseHexArray(featureReportTextArea.value);
+
+  featureReportIdText.value = hexbyte(reportId);
+  featureReportTextArea.value = hexview(data);
+
+  logappend('sendFeatureReport ID:' + hexbyte(reportId) + ' ' + hexview(data));
+
+  await connectedDevice.sendFeatureReport(reportId, data);
+};
+
+const receiveFeatureReport = async () => {
+  if (!connectedDevice) {
+    logappend('receiveFeatureReport: No connected device!');
+    return;
+  }
+
+  const featureReportIdText = document.getElementById('featurereportid');
+  const featureReportTextArea = document.getElementById('featurereport');
+
+  let reportId = 0;
+  if (featureReportIdText.value)
+    reportId = parseInt(featureReportIdText.value, 16);
+
+  logappend('receiveFeatureReport ID:' + hexbyte(reportId));
+  let data = await connectedDevice.receiveFeatureReport(reportId);
+
+  featureReportIdText.value = hexbyte(reportId);
+  featureReportTextArea.value = hexview(data);
+};
 
 navigator.hid.onconnect = (event) => {
   logDevice('onconnect', event.device);
-}
+};
 
 navigator.hid.ondisconnect = (event) => {
   logDevice('ondisconnect', event.device);
-}
+};
 
 logDeviceCount();
 
