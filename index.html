@@ -17,6 +17,31 @@ const hex16 = value => {
   return ('0000' + value.toString(16)).substr(-4).toUpperCase();
 };
 
+const hexview = data => {
+  let buffer = '';
+  let u8array = new Uint8Array(data.buffer);
+  for (const byteValue of u8array) {
+    if (buffer)
+      buffer += ' ';
+    buffer += hex8(byteValue);
+  }
+  return buffer;
+};
+
+const parseHexArray = text => {
+  // Remove non-hex characters.
+  text = text.replace(/[^0-9a-fA-F]/g, '');
+  if (text.length % 2)
+    return null;
+
+  // Parse each character pair as a hex byte value.
+  let u8 = new Uint8Array(text.length / 2);
+  for (let i = 0; i < text.length; i += 2)
+    u8[i / 2] = parseInt(text.substr(i, 2), 16);
+
+  return new DataView(u8.buffer);
+};
+
 // Displays the device chooser to allow the user to connect to a new device.
 // The selection is updated to the newly connected device.
 const connectDevice = () => {
@@ -68,6 +93,59 @@ const handleInputReport = event => {
     buffer += ' ' + hex8(byte);
 	inputReportTextView.innerHTML = buffer;
 }
+
+const sendOutputReport = () => {
+  if (!selectedDevice)
+    return;
+
+  const reportTextArea = document.getElementById('outputReport');
+  if (!reportTextArea)
+    return;
+
+  let data = parseHexArray(reportTextArea.value);
+  reportTextArea.value = hexview(data);
+
+	let reportId = data.getUint8(0);
+  let reportData = new Uint8Array(data.buffer).slice(1);
+  console.log(reportId, reportData);
+
+  selectedDevice.sendReport(reportId, reportData);
+};
+
+const sendFeatureReport = () => {
+  if (!selectedDevice)
+    return;
+
+  const reportTextArea = document.getElementById('featureReport');
+  if (!reportTextArea)
+  	return;
+
+  let data = parseHexArray(reportTextArea.value);
+  reportTextArea.value = hexview(data);
+
+	let reportId = data.getUint8(0);
+  let reportData = new Uint8Array(data.buffer).slice(1);
+
+  selectedDevice.sendFeatureReport(reportId, reportData);
+};
+
+const receiveFeatureReport = () => {
+  if (!selectedDevice)
+    return;
+
+  const reportTextArea = document.getElementById('featureReport');
+  if (!reportTextArea)
+  	return;
+
+  let data = parseHexArray(reportTextArea.value);
+  reportTextArea.value = hexview(data);
+
+	let reportId = data.getUint8(0);
+
+  selectedDevice.receiveFeatureReport(reportId).then(data => {
+    reportTextArea.value = hex8(reportId) + ' ' + hexview(data);
+  });
+};
 
 // Selects |device| and updates the device info display.
 const selectDevice = device => {
@@ -3234,7 +3312,11 @@ window.onload = () => {
 <select id="deviceSelect" oninput="deviceSelectionChanged()"></select>
 <br />
 Input report<br />
-<textarea id="inputReport" cols="100" rows="10" disabled></textarea><br />
+<textarea id="inputReport" cols="100" rows="5" disabled></textarea><br />
+Output report <button onclick="sendOutputReport()">Send</button><br />
+<textarea id="outputReport" cols="100" rows="5"></textarea><br />
+Feature report <button onclick="sendFeatureReport()">Send</button><button onclick="receiveFeatureReport()">Receive</button><br />
+<textarea id="featureReport" cols="100" rows="5"></textarea><br />
 Device info<br />
 <textarea id="deviceInfo" cols="100" rows="50" disabled></textarea><br />
 </body>
