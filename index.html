@@ -44,20 +44,18 @@ const parseHexArray = text => {
 
 // Displays the device chooser to allow the user to connect to a new device.
 // The selection is updated to the newly connected device.
-const connectDevice = () => {
-  navigator.hid.requestDevice({filters:[]}).then(devices => {
-    if (devices.length == 0)
-      return;
+const connectDevice = async () => {
+  const devices = await navigator.hid.requestDevice({filters:[]});
+  if (devices.length == 0)
+    return;
 
-    for (let device of devices)
-      addDevice(device);
-    selectDevice(devices[0]);
-  });
+  for (let device of devices)
+    await addDevice(device);
 };
 
 // Adds |device| to |connectedDevices|. Selects the device if there was no prior
 // selection.
-const addDevice = device => {
+const addDevice = async (device) => {
   if (connectedDevices.includes(device)) {
     console.log('device already in connectedDevices');
     return;
@@ -65,7 +63,7 @@ const addDevice = device => {
   connectedDevices.push(device);
   console.log('device connected: ' + device.productName);
   if (selectedDevice === null)
-    selectDevice(device);
+    await selectDevice(device);
   updateDeviceMenu();
 };
 
@@ -148,7 +146,7 @@ const receiveFeatureReport = () => {
 };
 
 // Selects |device| and updates the device info display.
-const selectDevice = device => {
+const selectDevice = async (device) => {
   if (selectedDevice)
     selectedDevice.oninputreport = null;
 
@@ -167,8 +165,8 @@ const selectDevice = device => {
 
   if (selectedDevice) {
     selectedDevice.oninputreport = handleInputReport;
-  	if (!selectedDevice.opened)
-      selectedDevice.open();
+    if (!selectedDevice.opened)
+      await selectedDevice.open();
   }
 
   updateDeviceInfo();
@@ -186,6 +184,8 @@ const updateDeviceMenu = () => {
     opt.device = null;
     opt.innerHTML = 'No connected devices';
     select.appendChild(opt);
+
+    updateDeviceInfo();
     return;
   }
 
@@ -3293,16 +3293,15 @@ const updateDeviceInfo = () => {
   textarea.innerHTML = deviceInfo;
 };
 
-window.onload = () => {
-  // Fetch the list of connected devices.
-  navigator.hid.getDevices().then(devices => {
-    for (let device of devices)
-      addDevice(device);
-  });
-
+window.onload = async () => {
   // Register for connection and disconnection events.
   navigator.hid.onconnect = e => { addDevice(e.device); };
   navigator.hid.ondisconnect = e => { removeDevice(e.device); };
+
+  // Fetch the list of connected devices.
+  const devices = await navigator.hid.getDevices();
+  for (let device of devices)
+    await addDevice(device);
 };
 </script>
 </head>
