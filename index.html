@@ -18315,7 +18315,7 @@ const usagesAsString = item => {
     usageStrings.push(usageName(usage));
   if (usageStrings.length == 1)
     return `Usage: ${usageStrings[0]}`;
-  return `Usages: ${usageStrings.join(', ')}`;
+  return `Usages:\n      ${usageStrings.join('\n      ')}`
 };
 
 // Returns the logical bounds of |item| as a human-readable string.
